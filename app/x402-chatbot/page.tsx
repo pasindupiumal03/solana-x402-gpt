@@ -8,8 +8,9 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Textarea } from '../../components/ui/textarea';
 import { Badge } from '../../components/ui/badge';
-import { Sparkles, MessageSquare, Image as ImageIcon, Send, Loader2, Wallet as WalletIcon, Zap, ChevronDown } from 'lucide-react';
+import { Sparkles, MessageSquare, Image as ImageIcon, Send, Loader2, Wallet as WalletIcon, Zap, ChevronDown, AlertCircle, DollarSign } from 'lucide-react';
 import axios from 'axios';
+import { paymentService } from '../../lib/usdcPayment';
 import '../styles/Dashboard.css';
 import '../styles/DashboardNew.css';
 
@@ -18,12 +19,13 @@ const API = `${BACKEND_URL}/api`;
 
 interface Message {
   id: number;
-  role: 'user' | 'assistant' | 'error';
+  role: 'user' | 'assistant' | 'error' | 'payment';
   content: string;
   timestamp: string;
   model?: string;
   cost?: number;
   isImage?: boolean;
+  paymentSignature?: string;
 }
 
 interface Model {
@@ -33,17 +35,26 @@ interface Model {
   costPerMessage: number;
 }
 
+interface PaymentState {
+  isProcessing: boolean;
+  signature?: string;
+  error?: string;
+}
+
 const DashboardNew = () => {
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, sendTransaction, wallet } = useWallet();
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [selectedModel, setSelectedModel] = useState('x402-crypto-agent');
   const [mode, setMode] = useState('conversation');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [totalCost, setTotalCost] = useState(0);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [paymentState, setPaymentState] = useState<PaymentState>({ isProcessing: false });
+  const [usdcBalance, setUsdcBalance] = useState<number>(0);
+  const [balanceLoading, setBalanceLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -53,6 +64,77 @@ const DashboardNew = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Check USDC balance when wallet connects
+  useEffect(() => {
+    if (connected && publicKey) {
+      checkUSDCBalance();
+    }
+  }, [connected, publicKey]);
+
+  const checkUSDCBalance = async () => {
+    if (!publicKey) return;
+    
+    setBalanceLoading(true);
+    try {
+      const balance = await paymentService.getUserUSDCBalance(publicKey);
+      setUsdcBalance(balance);
+      console.log('USDC Balance:', balance);
+    } catch (error) {
+      console.error('Error checking USDC balance:', error);
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
+
+  const processPayment = async (): Promise<string | null> => {
+    if (!publicKey || !sendTransaction || !wallet?.adapter) {
+      throw new Error('Wallet not connected');
+    }
+
+    setPaymentState({ isProcessing: true });
+
+    try {
+      console.log('Creating payment transaction...');
+      
+      // Create payment transaction
+      const paymentResult = await paymentService.createPaymentTransaction({
+        userPublicKey: publicKey,
+        amount: 0.00001,
+        memo: 'X402 Chat Payment'
+      });
+
+      if (!paymentResult.success || !paymentResult.transaction) {
+        throw new Error(paymentResult.error || 'Failed to create payment transaction');
+      }
+
+      console.log('Payment transaction created, requesting signature...');
+
+      // Send transaction through wallet
+      const signature = await sendTransaction(paymentResult.transaction, paymentService['connection']);
+
+      console.log('Transaction sent with signature:', signature);
+
+      // Add small delay to ensure transaction propagation
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      setPaymentState({ isProcessing: false, signature });
+      
+      // Update balance after payment
+      setTimeout(() => {
+        checkUSDCBalance();
+      }, 2000);
+
+      return signature;
+    } catch (error) {
+      console.error('Payment failed:', error);
+      setPaymentState({ 
+        isProcessing: false, 
+        error: error instanceof Error ? error.message : 'Payment failed' 
+      });
+      throw error;
+    }
+  };
 
   useEffect(() => {
     if (!connected) {
@@ -69,7 +151,7 @@ const DashboardNew = () => {
   }, [sessionId]);
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+    if (!inputMessage.trim() || isLoading || !publicKey) return;
 
     const userMessage: Message = {
       id: Date.now(),
@@ -83,18 +165,29 @@ const DashboardNew = () => {
     setIsLoading(true);
 
     try {
+      // Process payment first
+      console.log('Processing X402 payment...');
+      
+      const paymentSignature = await processPayment();
+      
+      if (!paymentSignature) {
+        throw new Error('Payment processing failed');
+      }
+
+      console.log('Payment successful, sending message to X402 API...');
+
       // Prepare conversation history
       const history = messages.map(msg => ({
-        role: msg.role,
-        content: msg.role === 'assistant' ? msg.content : msg.content
+        role: msg.role === 'assistant' ? 'assistant' : 'user',
+        content: msg.content
       }));
 
-      const response = await axios.post(`${API}/chat/send`, {
+      // Send to X402 API
+      const response = await axios.post('/api/x402-chatbot', {
         message: userMessage.content,
-        model: selectedModel,
-        mode: mode,
-        session_id: sessionId,
-        conversation_history: history
+        conversationHistory: history,
+        walletAddress: publicKey.toString(),
+        paymentSignature: paymentSignature
       });
 
       const data = response.data;
@@ -102,26 +195,38 @@ const DashboardNew = () => {
       const aiMessage: Message = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: data.message || data.image_url,
+        content: data.message,
         timestamp: new Date().toISOString(),
-        model: data.model,
-        cost: data.cost,
-        isImage: !!data.image_url
+        model: 'X402 Crypto Agent',
+        cost: data.cost || 0.00001,
+        paymentSignature: paymentSignature
       };
 
       setMessages((prev) => [...prev, aiMessage]);
-      setTotalCost((prev) => prev + data.cost);
+      setTotalCost((prev) => prev + (data.cost || 0.00001));
     } catch (error: any) {
       console.error('Error sending message:', error);
+      
+      let errorContent = 'Failed to send message. ';
+      
+      if (error.response?.status === 402) {
+        errorContent = '💰 Payment required: 0.00001 USDC per message. Please ensure you have sufficient USDC balance in your wallet.';
+      } else if (error.message?.includes('Payment')) {
+        errorContent = error.message + ' Please ensure you have sufficient USDC in your wallet.';
+      } else {
+        errorContent += error.response?.data?.error || error.message || 'Please try again.';
+      }
+      
       const errorMessage: Message = {
         id: Date.now() + 1,
         role: 'error',
-        content: error.response?.data?.detail || 'Failed to send message. Please check your API keys in backend .env file.',
+        content: errorContent,
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      setPaymentState({ isProcessing: false });
     }
   };
 
@@ -133,9 +238,7 @@ const DashboardNew = () => {
   };
 
   const models = [
-    { id: 'gpt-4o', name: 'GPT-4o', provider: 'OpenAI', icon: '🤖' },
-    { id: 'claude-3.5', name: 'Claude 3.5', provider: 'Anthropic', icon: '🧠' },
-    { id: 'gemini-2.0', name: 'Gemini 2.0', provider: 'Google', icon: '✨' },
+    { id: 'x402-crypto-agent', name: 'X402 Crypto Agent', provider: 'Premium AI', icon: '🚀' },
   ];
 
   const currentModel = models.find(m => m.id === selectedModel);
@@ -150,10 +253,16 @@ const DashboardNew = () => {
           </div>
           <div className="header-right">
             {publicKey && (
-              <Badge className="wallet-badge-dash">
-                <WalletIcon className="badge-icon-sm" />
-                {publicKey.toString().slice(0, 4)}...{publicKey.toString().slice(-4)}
-              </Badge>
+              <div className="wallet-info-group">
+                <Badge className="wallet-badge-dash">
+                  <WalletIcon className="badge-icon-sm" />
+                  {publicKey.toString().slice(0, 4)}...{publicKey.toString().slice(-4)}
+                </Badge>
+                <Badge className="balance-badge">
+                  <DollarSign className="badge-icon-sm" />
+                  {balanceLoading ? 'Loading...' : `${usdcBalance.toFixed(6)} USDC`}
+                </Badge>
+              </div>
             )}
             <WalletMultiButton />
           </div>
@@ -168,20 +277,12 @@ const DashboardNew = () => {
             <div className="control-group">
               <div className="mode-switch">
                 <button
-                  className={`mode-btn-sm ${mode === 'conversation' ? 'active' : ''}`}
-                  onClick={() => setMode('conversation')}
+                  className={`mode-btn-sm active`}
+                  disabled
                 >
                   <MessageSquare className="icon-sm" />
-                  <span>Chat</span>
-                  <span className="price-tag">0.01 USDC</span>
-                </button>
-                <button
-                  className={`mode-btn-sm ${mode === 'image' ? 'active' : ''}`}
-                  onClick={() => setMode('image')}
-                >
-                  <ImageIcon className="icon-sm" />
-                  <span>Image</span>
-                  <span className="price-tag">0.1 USDC</span>
+                  <span>X402 Chat</span>
+                  <span className="price-tag">0.00001 USDC</span>
                 </button>
               </div>
             </div>
@@ -189,40 +290,32 @@ const DashboardNew = () => {
             <div className="model-selector-dropdown">
               <button 
                 className="model-dropdown-btn"
-                onClick={() => setShowModelSelector(!showModelSelector)}
+                disabled
               >
                 <span className="model-icon">{currentModel?.icon}</span>
                 <span className="model-name-sm">{currentModel?.name}</span>
-                <ChevronDown className="chevron-icon" />
               </button>
-              
-              {showModelSelector && (
-                <div className="model-dropdown-menu">
-                  {models.map((model) => (
-                    <button
-                      key={model.id}
-                      className={`model-dropdown-item ${selectedModel === model.id ? 'selected' : ''}`}
-                      onClick={() => {
-                        setSelectedModel(model.id);
-                        setShowModelSelector(false);
-                      }}
-                    >
-                      <span className="model-icon">{model.icon}</span>
-                      <div className="model-info-dropdown">
-                        <span className="model-name">{model.name}</span>
-                        <span className="model-provider">{model.provider}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             <div className="cost-display">
               <Zap className="icon-sm zap-icon" />
-              <span className="cost-label">Total:</span>
-              <span className="cost-value">{totalCost.toFixed(3)} USDC</span>
+              <span className="cost-label">Session:</span>
+              <span className="cost-value">{totalCost.toFixed(6)} USDC</span>
             </div>
+
+            {paymentState.isProcessing && (
+              <div className="payment-status processing">
+                <Loader2 className="icon-sm spin-icon" />
+                <span>Processing Payment...</span>
+              </div>
+            )}
+
+            {usdcBalance < 0.00001 && !balanceLoading && (
+              <div className="payment-status insufficient">
+                <AlertCircle className="icon-sm" />
+                <span>Insufficient USDC Balance</span>
+              </div>
+            )}
           </div>
 
           {/* Messages Area */}
@@ -234,10 +327,15 @@ const DashboardNew = () => {
                     <div className="empty-icon-wrapper">
                       <Sparkles className="empty-icon-new" />
                     </div>
-                    <h3 className="empty-title-new">Ready to assist you</h3>
+                    <h3 className="empty-title-new">X402 Crypto Agent Ready</h3>
                     <p className="empty-description-new">
-                      Start a conversation with AI. Each message costs {mode === 'conversation' ? '0.01' : '0.1'} USDC.
+                      Premium cryptocurrency AI assistant. Each message costs 0.00001 USDC.
                     </p>
+                    <div className="empty-features">
+                      <div className="feature-item">🚀 Real-time crypto analysis</div>
+                      <div className="feature-item">💹 Trading strategies</div>
+                      <div className="feature-item">🔗 DeFi & blockchain expertise</div>
+                    </div>
                   </div>
                 ) : (
                   messages.map((message) => (
@@ -250,10 +348,19 @@ const DashboardNew = () => {
                       <div className="msg-body">
                         <div className="msg-header-sm">
                           <span className="msg-sender">
-                            {message.role === 'user' ? 'You' : message.role === 'error' ? 'Error' : currentModel?.name}
+                            {message.role === 'user' ? 'You' : 
+                             message.role === 'error' ? 'Error' : 
+                             message.role === 'payment' ? 'Payment' : 'X402 Agent'}
                           </span>
                           {message.cost && (
-                            <Badge className="cost-badge-sm">{message.cost.toFixed(3)} USDC</Badge>
+                            <Badge className="cost-badge-sm">
+                              {message.cost.toFixed(6)} USDC
+                            </Badge>
+                          )}
+                          {message.paymentSignature && (
+                            <Badge className="payment-badge-sm">
+                              ✅ Paid
+                            </Badge>
                           )}
                         </div>
                         <div className="msg-content-new">
@@ -267,14 +374,16 @@ const DashboardNew = () => {
                     </div>
                   ))
                 )}
-                {isLoading && (
+                {(isLoading || paymentState.isProcessing) && (
                   <div className="msg msg-assistant">
                     <div className="msg-avatar">
                       <Loader2 className="avatar-icon-sm spin-icon" />
                     </div>
                     <div className="msg-body">
                       <div className="msg-header-sm">
-                        <span className="msg-sender">AI is thinking...</span>
+                        <span className="msg-sender">
+                          {paymentState.isProcessing ? 'Processing Payment...' : 'X402 Agent thinking...'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -290,22 +399,25 @@ const DashboardNew = () => {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder={mode === 'conversation' ? 'Type your message...' : 'Describe the image you want to generate...'}
+              placeholder="Ask me about cryptocurrency, trading, DeFi, or blockchain development..."
               className="input-textarea-new"
               rows={2}
-              disabled={isLoading}
+              disabled={isLoading || paymentState.isProcessing || !connected}
             />
             <Button
               onClick={handleSendMessage}
-              disabled={!inputMessage.trim() || isLoading}
+              disabled={!inputMessage.trim() || isLoading || paymentState.isProcessing || !connected}
               className="send-btn-new"
             >
-              {isLoading ? (
+              {(isLoading || paymentState.isProcessing) ? (
                 <Loader2 className="btn-icon-sm spin-icon" />
               ) : (
                 <Send className="btn-icon-sm" />
               )}
-              <span>{mode === 'conversation' ? 'Send' : 'Generate'}</span>
+              <span>
+                {paymentState.isProcessing ? 'Paying...' : 
+                 isLoading ? 'Sending...' : 'Send (0.00001 USDC)'}
+              </span>
             </Button>
           </div>
         </div>
