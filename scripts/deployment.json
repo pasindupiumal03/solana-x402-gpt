@@ -1,0 +1,13 @@
+{
+  "scripts": {
+    "deploy:vercel": "vercel --prod",
+    "deploy:preview": "vercel",
+    "build:clean": "rimraf .next",
+    "build:prod": "pnpm run build:clean && pnpm build",
+    "start:prod": "next start"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
