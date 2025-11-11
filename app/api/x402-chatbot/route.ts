@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { paymentService } from '@/lib/usdcPayment';
 
+// Vercel Edge Runtime Configuration
+export const runtime = 'nodejs';
+export const maxDuration = 10;
+
 // Rate limiting storage (in production, use Redis or a database)
 const messageCount = new Map<string, { count: number; timestamp: number }>();
 
