@@ -39,6 +39,12 @@
   gap: 0.5rem;
 }
 
+.wallet-info-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .wallet-badge {
   display: flex;
   align-items: center;
@@ -47,6 +53,60 @@
   background: rgba(20, 241, 149, 0.1);
   border: 1px solid rgba(20, 241, 149, 0.3);
   color: #14f195;
+}
+
+.balance-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(153, 69, 255, 0.1);
+  border: 1px solid rgba(153, 69, 255, 0.3);
+  color: #9945ff;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.payment-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.payment-status.processing {
+  background: rgba(255, 165, 0, 0.1);
+  border: 1px solid rgba(255, 165, 0, 0.3);
+  color: #ffa500;
+}
+
+.payment-status.insufficient {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.empty-features {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.feature-item {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.payment-badge-sm {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
 }
 
 .wallet-icon {
