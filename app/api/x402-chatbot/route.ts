@@ -205,13 +205,274 @@ const searchTokenByNameOrSymbol = async (query: string) => {
   }
 };
 
+// Function to fetch Solana token data
+const fetchSolanaTokenData = async (address: string) => {
+  try {
+    console.log(`Fetching Solana token data for: ${address}`);
+    
+    // Try DexScreener first for Solana tokens
+    const dexResponse = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
+    if (dexResponse.ok) {
+      const dexData = await dexResponse.json();
+      if (dexData.pairs && dexData.pairs.length > 0) {
+        const bestPair = dexData.pairs[0];
+        return {
+          token: {
+            name: bestPair.baseToken?.name || 'Unknown',
+            symbol: bestPair.baseToken?.symbol || 'Unknown'
+          },
+          pools: [{
+            marketCap: {
+              usd: bestPair.marketCap || 0
+            },
+            price: {
+              usd: parseFloat(bestPair.priceUsd) || 0
+            },
+            liquidity: {
+              usd: bestPair.liquidity?.usd || 0
+            },
+            txns: {
+              volume24h: bestPair.volume?.h24 || 0,
+              buys: bestPair.txns?.h24?.buys || 0,
+              sells: bestPair.txns?.h24?.sells || 0
+            },
+            market: bestPair.dexId || 'Unknown',
+            security: {
+              freezeAuthority: null,
+              mintAuthority: null
+            }
+          }],
+          events: {
+            '24h': {
+              priceChangePercentage: bestPair.priceChange?.h24 || 0
+            }
+          }
+        };
+      }
+    }
+    
+    // Fallback to CoinGecko for Solana tokens
+    return await fetchSolanaTokenFromCoinGecko(address);
+  } catch (error) {
+    console.error('Error fetching Solana token data:', error);
+    return await fetchSolanaTokenFromCoinGecko(address);
+  }
+};
+
+// Fallback function to fetch Solana token data from CoinGecko
+const fetchSolanaTokenFromCoinGecko = async (address: string) => {
+  try {
+    console.log(`Trying CoinGecko fallback for Solana token: ${address}`);
+    
+    const cgUrl = `${COINGECKO_BASE_URL}/coins/solana/contract/${address}`;
+    const response = await fetch(cgUrl);
+    
+    if (!response.ok) {
+      console.log(`CoinGecko fallback failed: ${response.status}`);
+      return null;
+    }
+    
+    const cgData = await response.json();
+    
+    // Transform CoinGecko data to match expected format
+    return {
+      token: {
+        name: cgData.name,
+        symbol: cgData.symbol
+      },
+      pools: [{
+        marketCap: {
+          usd: cgData.market_data?.market_cap?.usd || 0
+        },
+        price: {
+          usd: cgData.market_data?.current_price?.usd || 0
+        },
+        liquidity: {
+          usd: 0
+        },
+        txns: {
+          volume24h: cgData.market_data?.total_volume?.usd || 0,
+          buys: 0,
+          sells: 0
+        },
+        market: 'coingecko',
+        security: {
+          freezeAuthority: null,
+          mintAuthority: null
+        }
+      }],
+      events: {
+        '24h': {
+          priceChangePercentage: cgData.market_data?.price_change_percentage_24h || 0
+        }
+      }
+    };
+  } catch (error) {
+    console.error('CoinGecko fallback failed:', error);
+    return null;
+  }
+};
+
+// Function to fetch Ethereum token data
+const fetchEthereumTokenData = async (address: string) => {
+  try {
+    // Use CoinGecko for Ethereum token data
+    const cgUrl = `${COINGECKO_BASE_URL}/coins/ethereum/contract/${address}`;
+    const cgResponse = await fetch(cgUrl);
+    const cgData = cgResponse.ok ? await cgResponse.json() : null;
+
+    // Use Ethplorer for additional data  
+    const ethUrl = `https://api.ethplorer.io/getTokenInfo/${address}?apiKey=freekey`;
+    const ethResponse = await fetch(ethUrl);
+    const ethData = ethResponse.ok ? await ethResponse.json() : null;
+
+    return {
+      coingecko: cgData,
+      ethplorer: ethData,
+    };
+  } catch (error) {
+    console.error('Error fetching Ethereum token data:', error);
+    return null;
+  }
+};
+
+// Function to format token data with detailed analysis
+const formatTokenDataWithOpenAI = async (tokenData: any, tokenType: 'solana' | 'ethereum', query: string) => {
+  try {
+    if (tokenType === 'solana') {
+      // Format Solana token data
+      const token = tokenData.token;
+      const risk = tokenData.risk;
+      const events = tokenData.events;
+      
+      // Find the best pool (highest liquidity)
+      const bestPool = tokenData.pools?.reduce((prev: any, current: any) => 
+        (current.liquidity?.usd || 0) > (prev?.liquidity?.usd || 0) ? current : prev
+      );
+      
+      const marketCap = bestPool?.marketCap?.usd;
+      const price = bestPool?.price?.usd;
+      const change24h = events?.['24h']?.priceChangePercentage;
+      const volume24h = bestPool?.txns?.volume24h;
+      const liquidity = bestPool?.liquidity?.usd;
+      const totalTxns = bestPool?.txns?.total;
+      const buys = bestPool?.txns?.buys;
+      const sells = bestPool?.txns?.sells;
+      
+      // Helper function to create clean token insights without N/A values
+      const createTokenInsights = () => {
+        const insights = [];
+        if (token?.name) insights.push(`- Name: ${token.name}`);
+        if (token?.symbol) insights.push(`- Symbol: ${token.symbol}`);
+        if (token?.creation?.creator) insights.push(`- Creator: ${token.creation.creator}`);
+        if (marketCap) insights.push(`- Market Cap: $${marketCap.toLocaleString()}`);
+        if (price) insights.push(`- Price: $${price}`);
+        if (change24h !== undefined && change24h !== null) insights.push(`- 24h Change: ${change24h.toFixed(2)}%`);
+        if (volume24h) insights.push(`- 24h Volume: $${volume24h.toLocaleString()}`);
+        if (liquidity) insights.push(`- Liquidity: $${liquidity.toLocaleString()}`);
+        if (tokenData.holders) insights.push(`- Holders: ${tokenData.holders.toLocaleString()}`);
+        if (totalTxns) insights.push(`- Total Transactions: ${totalTxns.toLocaleString()}`);
+        if (buys || sells) insights.push(`- Buys vs Sells: ${buys ? buys.toLocaleString() : '0'} Buys / ${sells ? sells.toLocaleString() : '0'} Sells`);
+        if (bestPool?.market) insights.push(`- Market: ${bestPool.market}`);
+        if (bestPool?.lpBurn) insights.push(`- LP Burn: ${bestPool.lpBurn}%`);
+        
+        const security = [];
+        if (bestPool?.security?.freezeAuthority !== undefined) {
+          security.push(`Freeze Authority ${bestPool.security.freezeAuthority ? 'Present' : 'Revoked'}`);
+        }
+        if (bestPool?.security?.mintAuthority !== undefined) {
+          security.push(`Mint Authority ${bestPool.security.mintAuthority ? 'Present' : 'Revoked'}`);
+        }
+        if (security.length > 0) insights.push(`- Security: ${security.join(', ')}`);
+        
+        if (risk?.score) insights.push(`- Risk Score: ${risk.score}/10`);
+        
+        return insights.join('\n');
+      };
+      
+      return `Solana Token Analysis - ${token?.name || 'Unknown'} (${token?.symbol || 'Unknown'})
+
+Token Insights:
+${createTokenInsights()}
+
+Market Performance:
+${token?.name || 'This token'} ${marketCap ? `has a ${marketCap < 1000000 ? 'relatively low' : marketCap < 10000000 ? 'moderate' : 'substantial'} market cap of $${marketCap.toLocaleString()}, which ${marketCap < 1000000 ? 'could indicate potential for growth but also higher risk' : 'suggests established market presence'}.` : 'has limited market cap information available.'} ${change24h !== undefined && change24h !== null ? (change24h > 0 ? ` The token has experienced a positive 24-hour change of +${change24h.toFixed(2)}%, indicating recent upward momentum.` : ` The token has experienced a ${change24h.toFixed(2)}% change in the last 24 hours, suggesting some volatility.`) : ''} ${liquidity && volume24h ? `The liquidity of $${liquidity.toLocaleString()} and 24-hour volume of $${volume24h.toLocaleString()} ${volume24h > 10000 ? 'show good trading activity' : 'indicate limited trading activity'} within the market.` : liquidity ? `Current liquidity of $${liquidity.toLocaleString()} is available for trading.` : volume24h ? `24-hour trading volume of $${volume24h.toLocaleString()} shows market activity.` : ''} ${tokenData.holders ? `With ${tokenData.holders.toLocaleString()} holders` : ''} ${totalTxns ? `${tokenData.holders ? ' and' : 'With'} over ${totalTxns.toLocaleString()} total transactions` : ''}, ${tokenData.holders && tokenData.holders > 1000 ? 'there is strong community engagement' : tokenData.holders ? 'there appears to be limited community engagement' : totalTxns && totalTxns > 100000 ? 'there is significant trading activity' : ''}.
+
+Risk Factors:
+${change24h && Math.abs(change24h) > 10 ? 'High volatility is indicated by the significant 24-hour price change, which may present both opportunities and risks for investors.' : 'Price volatility appears moderate based on recent performance.'} ${risk?.score ? `With a risk score of ${risk.score}/10, this represents ${risk.score > 7 ? 'high risk' : risk.score > 4 ? 'moderate risk' : 'lower risk'}.` : ''} ${bestPool?.market?.includes('pump') ? `The market being categorized as "${bestPool.market}" could imply speculative trading practices, which may lead to increased risk for investors.` : ''} ${liquidity && liquidity < 50000 ? 'Low liquidity could result in higher price slippage during trades.' : liquidity && liquidity > 100000 ? 'Good liquidity levels should provide smoother trading experiences.' : ''}
+
+Potential Investment Considerations:
+${marketCap && marketCap < 1000000 ? 'The relatively low market cap could present an opportunity for potential growth, though this comes with higher risk.' : ''} ${bestPool?.lpBurn && bestPool.lpBurn > 90 ? `The high LP burn rate of ${bestPool.lpBurn}% is appealing for investors looking for deflationary tokenomics.` : bestPool?.lpBurn && bestPool.lpBurn > 50 ? `The LP burn rate of ${bestPool.lpBurn}% shows some commitment to deflationary mechanics.` : ''} ${bestPool?.security ? `The ${bestPool.security.freezeAuthority ? 'presence of freeze authority raises centralization concerns' : 'revoked freeze authority'} and ${bestPool.security.mintAuthority ? 'active mint authority allows for token supply changes' : 'revoked mint authority indicate a level of decentralization and security'} within the token's ecosystem.` : ''}
+
+As with any investment, thorough research and risk assessment are essential before considering investing in ${token?.name || 'this token'}. Monitor market trends, community sentiment, and any upcoming developments related to the token for informed decision-making.`;
+
+    } else if (tokenType === 'ethereum') {
+      // Format Ethereum token data
+      const cgData = tokenData.coingecko;
+      const ethData = tokenData.ethplorer;
+      
+      const name = cgData?.name || ethData?.name;
+      const symbol = cgData?.symbol || ethData?.symbol;
+      const marketCap = cgData?.market_data?.market_cap?.usd;
+      const price = cgData?.market_data?.current_price?.usd;
+      const change24h = cgData?.market_data?.price_change_percentage_24h;
+      const volume24h = cgData?.market_data?.total_volume?.usd;
+      const holders = ethData?.holdersCount;
+      
+      // Helper function for Ethereum token insights without N/A values
+      const createEthTokenInsights = () => {
+        const insights = [];
+        if (name) insights.push(`- Name: ${name}`);
+        if (symbol) insights.push(`- Symbol: ${symbol.toUpperCase()}`);
+        if (marketCap) insights.push(`- Market Cap: $${marketCap.toLocaleString()}`);
+        if (price) insights.push(`- Price: $${price}`);
+        if (change24h !== undefined && change24h !== null) insights.push(`- 24h Change: ${change24h.toFixed(2)}%`);
+        if (volume24h) insights.push(`- 24h Volume: $${volume24h.toLocaleString()}`);
+        if (holders) insights.push(`- Holders: ${holders.toLocaleString()}`);
+        
+        const totalSupply = ethData?.totalSupply || cgData?.market_data?.total_supply;
+        if (totalSupply) insights.push(`- Total Supply: ${totalSupply}`);
+        
+        return insights.join('\n');
+      };
+      
+      return `Ethereum Token Analysis - ${name || 'Unknown'} (${symbol?.toUpperCase() || 'Unknown'})
+
+Token Insights:
+${createEthTokenInsights()}
+
+Market Performance:
+${name || 'This token'} ${marketCap ? `has a ${marketCap < 10000000 ? 'relatively small' : marketCap < 100000000 ? 'moderate' : 'substantial'} market cap of $${marketCap.toLocaleString()}.` : 'has limited market cap information available.'} ${change24h !== undefined && change24h !== null ? (change24h > 0 ? ` The token has experienced a positive 24-hour change of +${change24h.toFixed(2)}%, indicating recent upward momentum.` : ` The token has experienced a ${change24h.toFixed(2)}% change in the last 24 hours, suggesting volatility.`) : ''} ${volume24h ? `The 24-hour trading volume of $${volume24h.toLocaleString()} ${volume24h > 100000 ? 'shows healthy trading activity' : 'indicates limited trading activity'}.` : ''} ${holders ? `With ${holders.toLocaleString()} token holders, the token ${holders > 10000 ? 'has established community adoption' : 'has limited community adoption'}.` : ''}
+
+Risk Factors:
+${change24h && Math.abs(change24h) > 15 ? 'High volatility is evident from the significant 24-hour price change.' : 'Price volatility appears within normal ranges.'} ${holders && holders < 1000 ? 'The relatively small number of holders could indicate concentration risk.' : ''} ${marketCap && marketCap < 1000000 ? 'Small market cap tokens can be subject to higher volatility and manipulation risks.' : ''}
+
+Potential Investment Considerations:
+${marketCap && marketCap < 10000000 ? 'The smaller market cap could represent growth potential but comes with increased risk.' : ''} ${volume24h && marketCap && (volume24h / marketCap) > 0.1 ? 'High trading volume relative to market cap suggests active investor interest.' : ''} Being an Ethereum-based token provides access to the established DeFi ecosystem and broader market liquidity.
+
+Conduct thorough research including smart contract audits, team background, and project fundamentals before making any investment decisions regarding ${name || 'this token'}.`;
+    }
+    
+    return 'Unable to format token data.';
+  } catch (error) {
+    console.error('Error formatting token data:', error);
+    return 'Unable to generate detailed analysis at this time.';
+  }
+};
+
 // Function to format market data responses
 const formatMarketDataResponse = async (dataType: string, data: any) => {
   // Create a fallback response in case OpenAI is not available
   const createFallbackResponse = (dataType: string, data: any) => {
     switch (dataType) {
       case 'bitcoin_price':
-        return `📈 Bitcoin (BTC) Real-Time Data:\n- Price: $${data.price?.toLocaleString() || 'N/A'}\n- 24h Change: ${data.change24h?.toFixed(2) || 'N/A'}%\n- 24h Volume: $${data.volume24h?.toLocaleString() || 'N/A'}\n- Market Cap: $${data.marketCap?.toLocaleString() || 'N/A'}\n\n🚀 Analysis:\nBitcoin shows ${data.change24h > 0 ? 'positive momentum' : 'consolidation'} with ${Math.abs(data.change24h)?.toFixed(2)}% movement in the last 24 hours.\n\n*Premium crypto analysis via X402 protocol*`;
+        const btcData = [];
+        if (data.price) btcData.push(`- Price: $${data.price.toLocaleString()}`);
+        if (data.change24h !== undefined) btcData.push(`- 24h Change: ${data.change24h.toFixed(2)}%`);
+        if (data.volume24h) btcData.push(`- 24h Volume: $${data.volume24h.toLocaleString()}`);
+        if (data.marketCap) btcData.push(`- Market Cap: $${data.marketCap.toLocaleString()}`);
+        
+        return `📈 Bitcoin (BTC) Real-Time Data:\n${btcData.join('\n')}\n\n🚀 Analysis:\nBitcoin shows ${data.change24h > 0 ? 'positive momentum' : 'consolidation'} with ${Math.abs(data.change24h)?.toFixed(2)}% movement in the last 24 hours.\n\n*Premium crypto analysis via X402 protocol*`;
       
       case 'top_gainers':
         const gainersText = data?.map((coin: any, index: number) => 
@@ -226,10 +487,16 @@ const formatMarketDataResponse = async (dataType: string, data: any) => {
         const ethDominance = data?.global?.market_cap_percentage?.eth;
         
         const trendingCoins = data?.trending?.map((item: any, index: number) => 
-          `${index + 1}. ${item.item.name} (${item.item.symbol}) - Rank #${item.item.market_cap_rank || 'N/A'}`
-        ).join('\n') || 'No trending data available';
+          `${index + 1}. ${item.item.name} (${item.item.symbol})${item.item.market_cap_rank ? ` - Rank #${item.item.market_cap_rank}` : ''}`
+        ).join('\n') || '';
         
-        return `📊 Cryptocurrency Market Overview\n\nMarket Statistics:\n• Total Market Cap: $${totalMarketCap?.toLocaleString() || 'N/A'}\n• 24h Market Cap Change: ${marketCapChange?.toFixed(2) || 'N/A'}%\n• Bitcoin Dominance: ${btcDominance?.toFixed(2) || 'N/A'}%\n• Ethereum Dominance: ${ethDominance?.toFixed(2) || 'N/A'}%\n\nTop Trending:\n${trendingCoins}\n\n*Premium crypto analysis via X402 protocol*`;
+        const marketStats = [];
+        if (totalMarketCap) marketStats.push(`• Total Market Cap: $${totalMarketCap.toLocaleString()}`);
+        if (marketCapChange !== undefined) marketStats.push(`• 24h Market Cap Change: ${marketCapChange.toFixed(2)}%`);
+        if (btcDominance) marketStats.push(`• Bitcoin Dominance: ${btcDominance.toFixed(2)}%`);
+        if (ethDominance) marketStats.push(`• Ethereum Dominance: ${ethDominance.toFixed(2)}%`);
+        
+        return `📊 Cryptocurrency Market Overview\n\n${marketStats.length > 0 ? `Market Statistics:\n${marketStats.join('\n')}\n\n` : ''}${trendingCoins ? `Top Trending:\n${trendingCoins}\n\n` : ''}*Premium crypto analysis via X402 protocol*`;
         
       case 'top_coins':
         const topCoinsText = data?.map((coin: any, index: number) => 
@@ -238,7 +505,13 @@ const formatMarketDataResponse = async (dataType: string, data: any) => {
         return `🏆 Top 15 Cryptocurrencies by Market Cap\n\n${topCoinsText}\n\n*Premium crypto analysis via X402 protocol*`;
         
       case 'ethereum_price':
-        return `📈 Ethereum (ETH) Real-Time Data:\n- Price: $${data.usd?.toLocaleString() || 'N/A'}\n- 24h Change: ${data.usd_24h_change?.toFixed(2) || 'N/A'}%\n- 24h Volume: $${data.usd_24h_vol?.toLocaleString() || 'N/A'}\n- Market Cap: $${data.usd_market_cap?.toLocaleString() || 'N/A'}\n\n🚀 Analysis:\nEthereum shows ${data.usd_24h_change > 0 ? 'bullish momentum' : 'market correction'} with ${Math.abs(data.usd_24h_change)?.toFixed(2)}% movement.\n\n*Premium crypto analysis via X402 protocol*`;
+        const ethData = [];
+        if (data.usd) ethData.push(`- Price: $${data.usd.toLocaleString()}`);
+        if (data.usd_24h_change !== undefined) ethData.push(`- 24h Change: ${data.usd_24h_change.toFixed(2)}%`);
+        if (data.usd_24h_vol) ethData.push(`- 24h Volume: $${data.usd_24h_vol.toLocaleString()}`);
+        if (data.usd_market_cap) ethData.push(`- Market Cap: $${data.usd_market_cap.toLocaleString()}`);
+        
+        return `📈 Ethereum (ETH) Real-Time Data:\n${ethData.join('\n')}\n\n🚀 Analysis:\nEthereum shows ${data.usd_24h_change > 0 ? 'bullish momentum' : 'market correction'} with ${Math.abs(data.usd_24h_change)?.toFixed(2)}% movement.\n\n*Premium crypto analysis via X402 protocol*`;
         
       case 'solana_price':
         return `📈 Solana (SOL) Real-Time Data:\n- Price: $${data.usd?.toLocaleString() || 'N/A'}\n- 24h Change: ${data.usd_24h_change?.toFixed(2) || 'N/A'}%\n- 24h Volume: $${data.usd_24h_vol?.toLocaleString() || 'N/A'}\n- Market Cap: $${data.usd_market_cap?.toLocaleString() || 'N/A'}\n\n🚀 Analysis:\nSolana demonstrates ${data.usd_24h_change > 0 ? 'strong performance' : 'consolidation phase'} with ${Math.abs(data.usd_24h_change)?.toFixed(2)}% change in the last 24 hours.\n\n💡 Key Insights:\n1. Price Action: ${data.usd_24h_change > 0 ? 'Positive momentum suggests growing confidence' : 'Price correction may present buying opportunities'}\n2. Volume Analysis: $${data.usd_24h_vol?.toLocaleString()} in 24h trading volume indicates ${data.usd_24h_vol > 1000000000 ? 'high' : 'moderate'} market activity\n3. Market Position: With $${data.usd_market_cap?.toLocaleString()} market cap, SOL maintains strong market presence\n\n*Premium crypto analysis via X402 protocol*`;
@@ -637,6 +910,40 @@ export async function POST(request: NextRequest) {
           currency: 'USDC'
         });
       }
+    }
+    
+    // Check if the message is a token address
+    const tokenType = detectTokenType(trimmedMessage);
+    
+    if (tokenType !== 'unknown') {
+      // It's a token address, fetch detailed data
+      let tokenData = null;
+      let aiResponse = '';
+      
+      console.log(`Detected ${tokenType} token address: ${trimmedMessage}`);
+      
+      if (tokenType === 'solana') {
+        tokenData = await fetchSolanaTokenData(trimmedMessage);
+        if (tokenData) {
+          aiResponse = await formatTokenDataWithOpenAI(tokenData, 'solana', trimmedMessage);
+        } else {
+          aiResponse = `I couldn't find data for this Solana token address: **${trimmedMessage}**\n\nThis could be due to:\n• The token is very new and not yet indexed\n• The address might be incorrect\n• API services are temporarily unavailable\n\nPlease verify the address and try again, or search by token name/symbol instead.\n\n*X402 protocol token analysis*`;
+        }
+      } else if (tokenType === 'ethereum') {
+        tokenData = await fetchEthereumTokenData(trimmedMessage);
+        if (tokenData && (tokenData.coingecko || tokenData.ethplorer)) {
+          aiResponse = await formatTokenDataWithOpenAI(tokenData, 'ethereum', trimmedMessage);
+        } else {
+          aiResponse = `I couldn't find data for this Ethereum token address: **${trimmedMessage}**\n\nThis could be due to:\n• The token is very new and not yet indexed\n• The address might be incorrect\n• API services are temporarily unavailable\n\nPlease verify the address and try again, or search by token name/symbol instead.\n\n*X402 protocol token analysis*`;
+        }
+      }
+      
+      return NextResponse.json({ 
+        message: aiResponse,
+        paymentVerified: true,
+        cost: 0.00001,
+        currency: 'USDC'
+      });
     }
     
     // Check if it might be a token name or symbol search

@@ -367,7 +367,40 @@ const DashboardNew = () => {
                           {message.isImage ? (
                             <img src={message.content} alt="Generated" className="generated-img" />
                           ) : (
-                            <p className="msg-text">{message.content}</p>
+                            <div>
+                              {/* Show timestamp for assistant messages */}
+                              {message.role === 'assistant' && (
+                                <div className="msg-timestamp">
+                                  {new Date(message.timestamp).toLocaleString('en-US', {
+                                    weekday: 'short',
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit',
+                                    timeZoneName: 'short'
+                                  })}
+                                </div>
+                              )}
+                              <div className="msg-text formatted-content">
+                                {message.content.split('\n').map((line, index) => (
+                                  <React.Fragment key={index}>
+                                    {line}
+                                    {index < message.content.split('\n').length - 1 && <br />}
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                              {/* Show transaction hash for assistant messages */}
+                              {message.role === 'assistant' && message.paymentSignature && (
+                                <div className="msg-tx-hash">
+                                  <span className="tx-label">Tx: </span>
+                                  <code className="tx-hash">
+                                    {message.paymentSignature.slice(0, 8)}...{message.paymentSignature.slice(-8)}
+                                  </code>
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
