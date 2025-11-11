@@ -5,11 +5,10 @@
   "installCommand": "pnpm install",
   "devCommand": "pnpm dev",
   "outputDirectory": ".next",
-  "regions": ["iad1", "sfo1", "lhr1", "hnd1"],
   "functions": {
     "app/api/**/*.ts": {
       "runtime": "nodejs20.x",
-      "maxDuration": 30
+      "maxDuration": 10
     }
   },
   "headers": [
