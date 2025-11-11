@@ -520,3 +520,96 @@
     display: none;
   }
 }
+
+/* Message timestamp and transaction styles */
+.msg-timestamp {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 0.5rem;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  display: inline-block;
+  font-weight: 500;
+}
+
+.formatted-content {
+  line-height: 1.7;
+  white-space: pre-wrap;
+  font-family: 'Inter', 'Segoe UI', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+/* Enhanced message text styling */
+.msg-text {
+  font-family: 'Inter', 'Segoe UI', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 400;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 0.95rem;
+}
+
+/* Crypto-specific content styling */
+.formatted-content strong,
+.formatted-content b {
+  color: #14f195;
+  font-weight: 600;
+}
+
+.formatted-content code {
+  background: rgba(20, 241, 149, 0.1);
+  color: #14f195;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-size: 0.85rem;
+  border: 1px solid rgba(20, 241, 149, 0.2);
+}
+
+/* Token analysis specific formatting */
+.formatted-content {
+  font-family: var(--font-inter, 'Inter', 'Segoe UI', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif);
+}
+
+/* Enhanced styling for crypto data */
+.formatted-content {
+  font-weight: 400;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* Header styling for token analysis */
+.msg-assistant .formatted-content::first-line {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: #ffffff;
+}
+
+.msg-tx-hash {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.8rem;
+}
+
+.tx-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+}
+
+.tx-hash {
+  color: #14f195;
+  background: rgba(20, 241, 149, 0.1);
+  border: 1px solid rgba(20, 241, 149, 0.2);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Courier New', monospace;
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
