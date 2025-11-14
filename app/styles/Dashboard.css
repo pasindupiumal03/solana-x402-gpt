@@ -613,3 +613,80 @@
   font-weight: 500;
   letter-spacing: 0.5px;
 }
+
+/* X402 Agent Button Styles - Match wallet adapter styling */
+.x402-agent-btn {
+  background: transparent !important;
+  color: white !important;
+  border: 2px solid rgba(20, 241, 149, 0.5) !important;
+  padding: 0.5rem 1.5rem !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  font-family: inherit !important;
+}
+
+.x402-agent-btn:hover:not(:disabled) {
+  background: rgba(20, 241, 149, 0.1) !important;
+  border-color: rgba(20, 241, 149, 0.8) !important;
+  transform: translateY(-2px) !important;
+}
+
+.primary-cta-x402 {
+  background: transparent !important;
+  color: white !important;
+  border: 2px solid rgba(20, 241, 149, 0.5) !important;
+  padding: 1rem 2rem !important;
+  font-size: 1.125rem !important;
+  font-weight: 600 !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  font-family: inherit !important;
+}
+
+.primary-cta-x402:hover:not(:disabled) {
+  background: rgba(20, 241, 149, 0.1) !important;
+  border-color: rgba(20, 241, 149, 0.8) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* Connect Wallet Prompt */
+.connect-wallet-prompt {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(20, 241, 149, 0.05);
+  border: 1px solid rgba(20, 241, 149, 0.2);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.connect-text {
+  color: #14f195;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Responsive adjustments for X402 buttons */
+@media (max-width: 768px) {
+  .x402-agent-btn {
+    padding: 0.5rem 1.2rem;
+    font-size: 0.85rem;
+  }
+  
+  .primary-cta-x402 {
+    padding: 0.8rem 1.5rem;
+    font-size: 1rem;
+    min-width: 150px;
+  }
+}

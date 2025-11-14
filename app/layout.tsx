@@ -7,6 +7,7 @@ import { WalletContextProvider } from "./contexts/WalletContext"
 import "./styles/index.css"
 import "./styles/App.css"
 import "./styles/main.d0f6361a.css"
+import "./styles/Dashboard.css"
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })

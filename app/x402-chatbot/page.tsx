@@ -136,11 +136,12 @@ const DashboardNew = () => {
     }
   };
 
-  useEffect(() => {
-    if (!connected) {
-      router.push('/');
-    }
-  }, [connected, router]);
+  // Remove the wallet connection requirement - users can access the page without connecting
+  // useEffect(() => {
+  //   if (!connected) {
+  //     router.push('/');
+  //   }
+  // }, [connected, router]);
 
   useEffect(() => {
     // Generate session ID on mount
@@ -328,14 +329,25 @@ const DashboardNew = () => {
                       <Sparkles className="empty-icon-new" />
                     </div>
                     <h3 className="empty-title-new">X402 Crypto Agent Ready</h3>
-                    <p className="empty-description-new">
-                      Premium cryptocurrency AI assistant. Each message costs 0.00001 USDC.
-                    </p>
+                    {!connected ? (
+                      <p className="empty-description-new">
+                        Connect your Solana wallet to start chatting. Each message costs 0.00001 USDC.
+                      </p>
+                    ) : (
+                      <p className="empty-description-new">
+                        Premium cryptocurrency AI assistant. Each message costs 0.00001 USDC.
+                      </p>
+                    )}
                     <div className="empty-features">
                       <div className="feature-item">🚀 Real-time crypto analysis</div>
                       <div className="feature-item">💹 Trading strategies</div>
                       <div className="feature-item">🔗 DeFi & blockchain expertise</div>
                     </div>
+                    {!connected && (
+                      <div className="connect-wallet-prompt">
+                        <p className="connect-text">👆 Click "Select Wallet" above to get started</p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   messages.map((message) => (
@@ -432,7 +444,7 @@ const DashboardNew = () => {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me about cryptocurrency, trading, DeFi, or blockchain development..."
+              placeholder={!connected ? "Connect your wallet to start chatting with X402 Agent..." : "Ask me about cryptocurrency, trading, DeFi, or blockchain development..."}
               className="input-textarea-new"
               rows={2}
               disabled={isLoading || paymentState.isProcessing || !connected}
