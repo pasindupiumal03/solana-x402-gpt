@@ -18,17 +18,12 @@ const Home = () => {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
 
-  // Auto redirect to dashboard when wallet is connected
-  useEffect(() => {
-    if (connected) {
-      router.push('/x402-chatbot');
-    }
-  }, [connected, router]);
-
   const handleGetStarted = () => {
-    if (connected) {
-      router.push('/x402-chatbot');
-    }
+    router.push('/x402-chatbot');
+  };
+
+  const handleNavigateToX402 = () => {
+    router.push('/x402-chatbot');
   };
 
   const handleWatchDemo = () => {
@@ -82,7 +77,9 @@ const Home = () => {
             <a href="#pricing">Pricing</a>
           </nav>
           <div className="header-actions">
-            <WalletMultiButton />
+            <Button onClick={handleNavigateToX402} className="x402-agent-btn">
+              X402 Agent
+            </Button>
           </div>
         </div>
       </header>
@@ -101,7 +98,9 @@ const Home = () => {
             Use All in One AI Provider for conversation and image generation from the 3 biggest AI providers GPT, Gemini, Claude with the latest pro versions now available with Pay-As-You-Go feature at 0.01 USDC per action using X402 Protocol on Solana network.
           </p>
           <div className="hero-actions">
-            <WalletMultiButton className="primary-cta-wallet" />
+            <Button size="lg" onClick={handleNavigateToX402} className="primary-cta-x402">
+              X402 Agent
+            </Button>
             <Button size="lg" variant="outline" onClick={handleWatchDemo} className="secondary-cta">
               <Play className="btn-icon" />
               How it works
@@ -410,8 +409,8 @@ const Home = () => {
           <div className="model-badge">Gemini Pro</div>
           <div className="model-badge">GPT-4 Turbo</div>
         </div>
-        <Button size="lg" onClick={handleGetStarted} className="models-cta">
-          See all models
+        <Button size="lg" onClick={handleNavigateToX402} className="models-cta">
+          Try X402 Agent
           <ArrowRight className="btn-icon" />
         </Button>
       </section>
@@ -419,14 +418,14 @@ const Home = () => {
       {/* CTA Section */}
       <section className="cta-section">
         <div className="cta-content">
-          <h2 className="cta-title">Connect wallet and start chatting with AI</h2>
+          <h2 className="cta-title">Start chatting with X402 AI Agent</h2>
           <p className="cta-description">
-            Download your Solana wallet or use existing wallet to experience the future of AI-powered conversations with instant crypto payments.
+            Experience the future of AI-powered conversations with instant crypto payments. Connect your wallet when ready to chat.
           </p>
           <div className="cta-buttons">
-            <Button size="lg" onClick={handleGetStarted} className="cta-primary">
-              <Wallet className="btn-icon" />
-              Connect Wallet
+            <Button size="lg" onClick={handleNavigateToX402} className="cta-primary">
+              <Sparkles className="btn-icon" />
+              Try X402 Agent
             </Button>
           </div>
         </div>
